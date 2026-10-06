@@ -1,0 +1,11 @@
+{
+  "name": "tstu-schedule",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ТГТУ Расписание — приложение-клон Telegram-бота",
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/core": "^6.1.2"
+  }
+}

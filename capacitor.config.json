@@ -1,0 +1,8 @@
+{
+  "appId": "ru.tstu.schedule",
+  "appName": "ТГТУ Расписание",
+  "webDir": "www",
+  "backgroundColor": "#0f1220",
+  "server": { "androidScheme": "https", "cleartext": true },
+  "android": { "allowMixedContent": true }
+}
