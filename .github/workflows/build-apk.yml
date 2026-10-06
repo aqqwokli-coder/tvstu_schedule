@@ -4,15 +4,18 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -25,7 +28,26 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
-      - uses: actions/upload-artifact@v4
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/tstu-schedule.apk"
+      - uses: actions/upload-artifact@v5
         with:
           name: tstu-schedule-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: tstu-schedule.apk
+      # Постоянная ссылка: Releases -> latest -> tstu-schedule.apk
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest tstu-schedule.apk \
+            --title "ТГТУ Расписание (сборка ${GITHUB_SHA::7})" \
+            --notes "Debug-сборка из коммита ${GITHUB_SHA}. Скачай tstu-schedule.apk и установи на телефон."
+      # Копия APK в ветке apk (удобно забирать через git)
+      - name: Push APK to branch
+        run: |
+          mkdir /tmp/apkbr && cp tstu-schedule.apk /tmp/apkbr/ && cd /tmp/apkbr
+          git init -q -b apk
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add tstu-schedule.apk && git commit -qm "APK ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" apk
