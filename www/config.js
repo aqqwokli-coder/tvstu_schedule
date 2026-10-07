@@ -1,2 +1,2 @@
 // Адрес твоего API. Меняется ОДИН раз тут перед сборкой (или в приложении: ⚙ на экране входа).
-window.DEFAULT_API = "https://retiaq.dog";
+window.DEFAULT_API = "https://ret1aq.fun";
