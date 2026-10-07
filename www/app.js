@@ -23,10 +23,10 @@ async function api(path, method = "GET", body) {
   const t = LS.get("token"); if (t) h.Authorization = "Bearer " + t;
   let r;
   try { r = await fetch(apiBase() + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined }); }
-  catch (e) { throw new Error("Нет связи с сервером. Проверь интернет и адрес сервера."); }
+  catch (e) { throw new Error("Нет связи с сервером (" + apiBase() + "): " + (e && e.message || e)); }
   let j = null; try { j = await r.json(); } catch (e) {}
   if (r.status === 401) { LS.del("token"); S.me = null; render(); throw new Error("Сессия истекла, войдите заново"); }
-  if (!r.ok) throw new Error((j && (typeof j.detail === "string" ? j.detail : "Ошибка запроса")) || "Ошибка " + r.status);
+  if (!r.ok) throw new Error((j && (typeof j.detail === "string" ? j.detail : "Ошибка запроса")) || ("Ошибка " + r.status + " (" + apiBase() + path + ")"));
   return j;
 }
 async function act(fn, ok) { try { const r = await fn(); if (ok) toast(ok); return r; } catch (e) { toast(e.message, true); return null; } }
@@ -61,7 +61,12 @@ function confirmBox(text, yes) {
 }
 
 // ================= вход =================
+function pendingCode() {
+  const t = +(LS.get("code_at") || 0);
+  return t && Date.now() - t < 5 * 60 * 1000 && LS.get("tgid");
+}
 function loginView() {
+  if (!S.loginStep && pendingCode()) { S.loginStep = 2; S.tgId = +LS.get("tgid"); }
   const step = S.loginStep || 1;
   $("#app").innerHTML = `<div class="center">
     <div class="logo">🎓</div><h1 style="text-align:center;margin:0">ТГТУ Расписание</h1>
@@ -77,6 +82,7 @@ function loginView() {
       <button class="btn full" id="go">Войти</button>
       <button class="btn sec full" id="back">Назад</button>`}
     <button class="btn sec sm" id="srv" style="align-self:center;margin-top:14px">⚙ Адрес сервера</button>
+    <div class="mut" style="text-align:center;font-size:11px;opacity:.6">${esc(apiBase())}</div>
   </div>`;
   $("#srv").onclick = () => ask("Адрес сервера", [{ id: "u", label: "URL API", value: apiBase(), ph: "https://example.com" }], v => { LS.set("api", v.u.trim()); toast("Сохранено"); });
   if (step === 1) {
@@ -86,14 +92,23 @@ function loginView() {
       $("#go").disabled = true;
       const r = await act(() => api("/api/auth/request", "POST", { telegram_id: id }), "Код отправлен");
       $("#go").disabled = false;
-      if (r) { S.tgId = id; LS.set("tgid", id); S.loginStep = 2; loginView(); }
+      if (r) { S.tgId = id; LS.set("tgid", id); LS.set("code_at", Date.now()); S.loginStep = 2; loginView(); }
     };
   } else {
-    $("#back").onclick = () => { S.loginStep = 1; loginView(); };
-    $("#go").onclick = async () => {
-      const r = await act(() => api("/api/auth/verify", "POST", { telegram_id: S.tgId, code: $("#code").value }));
-      if (r) { LS.set("token", r.token); S.loginStep = 1; boot(); }
+    $("#back").onclick = () => { LS.del("code_at"); S.loginStep = 1; loginView(); };
+    let busy = false;
+    const verify = async () => {
+      const code = ($("#code").value || "").replace(/\D/g, "");
+      if (code.length !== 6) return toast("Введи 6 цифр из Telegram", true);
+      if (busy) return; busy = true; $("#go").disabled = true; $("#go").textContent = "Проверяю…";
+      const r = await act(() => api("/api/auth/verify", "POST", { telegram_id: S.tgId || +LS.get("tgid"), code }));
+      busy = false;
+      if (r) { LS.set("token", r.token); LS.del("code_at"); S.loginStep = 1; boot(); }
+      else if ($("#go")) { $("#go").disabled = false; $("#go").textContent = "Войти"; }
     };
+    $("#go").onclick = verify;
+    $("#code").addEventListener("input", e => { const v = e.target.value.replace(/\D/g, ""); if (v.length === 6) { e.target.blur(); verify(); } });
+    $("#code").addEventListener("keydown", e => { if (e.key === "Enter") verify(); });
   }
 }
 
@@ -360,4 +375,6 @@ async function viewAdmin() {
   }
 }
 
+window.addEventListener("error", e => toast("Ошибка приложения: " + e.message, true));
+window.addEventListener("unhandledrejection", e => toast("Ошибка приложения: " + (e.reason && e.reason.message || e.reason), true));
 boot();
